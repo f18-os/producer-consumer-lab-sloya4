@@ -102,7 +102,7 @@ class GrayProducer(threading.Thread):
 				self.gQueue.put(grayFrame)
 				self.condition2.notify()
 				self.condition2.wait()
-			self.condition2.realease()
+			self.condition2.release()
 
 
 main()
