@@ -8,14 +8,17 @@ import base64
 
 def main():
 	condition = threading.Condition()
-	#condition = threading.Conditon()
+	condition2 = threading.Condition()
 	q = Queue(10)
+	gq = Queue(10)
 	fileName = 'clip.mp4'
 	producer = Producer(q, condition, fileName)
-	consume = Consumer(q, condition)
+	consume = Consumer(gq, condition2)
+	grayProducer = GrayProducer(q, condition, condition2, gq)
 
 	producer.start()
 	consume.start()
+	grayProducer.start()
 	q.join()
 
 class Producer(threading.Thread):
@@ -69,6 +72,38 @@ class Consumer(threading.Thread):
 				break
 			count += 1
 			self.condition.release()
+
+class GrayProducer(threading.Thread):
+	def __init__(self, queue, condition,condition2, gQueue):
+		super(GrayProducer,self).__init__()
+		self.queue = queue
+		self.condition = condition
+		self.condition2 = condition2
+		self.gQueue = gQueue
+	
+	def run(self):
+		count = 0
+		while True:
+			self.condition.acquire()
+			if self.queue.qsize() <= 0:
+				self.condition.notify()
+				self.condition.wait()
+			frameAsText = self.queue.get()
+			self.condition.release()
+			
+			self.condition2.acquire()	
+			if self.gQueue.qsize() < 10:
+				jpgRawImage = base64.b64decode(frameAsText)
+				jpgImage = np.asarray(bytearray(jpgRawImage), dtype=np.uint8)
+				img = cv2.imdecode( jpgImage,cv2.IMREAD_GRAYSCALE)
+				success, jpgImage = cv2.imencode('.jpg', img)
+				grayFrame = base64.b64encode(jpgImage)
+				print("Transforming frame {}".format(count))
+				self.gQueue.put(grayFrame)
+				self.condition2.notify()
+				self.condition2.wait()
+			self.condition2.realease()
+
 
 main()
  
