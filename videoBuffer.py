@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 
 import threading
 from queue import Queue
@@ -7,20 +8,28 @@ import numpy as np
 import base64
 
 def main():
+	#Threading conditions
 	condition = threading.Condition()
 	condition2 = threading.Condition()
+	#Color queue
 	q = Queue(10)
+	
+	#Gray queue
 	gq = Queue(10)
+
 	fileName = 'clip.mp4'
+	#Initializing producer, consumer, and gray producer
 	producer = Producer(q, condition, fileName)
 	consume = Consumer(gq, condition2)
 	grayProducer = GrayProducer(q, condition, condition2, gq)
 
+	#Start thread
 	producer.start()
 	consume.start()
 	grayProducer.start()
 	q.join()
 
+#Producer class
 class Producer(threading.Thread):
 	def __init__(self,queue, condition, fileName):
 		super(Producer, self).__init__()
@@ -34,7 +43,8 @@ class Producer(threading.Thread):
 		sucess,image = vidcap.read()
 
 		while True:
-			self.condition.acquire()	
+			self.condition.acquire()
+			#Execute only if the queue is not full	
 			if self.queue.qsize() < 10:
 				success, jpgImage = cv2.imencode('.jpg', image)
 				jpgAsText = base64.b64encode(jpgImage)
@@ -46,6 +56,7 @@ class Producer(threading.Thread):
 				self.condition.wait()
 			self.condition.release()
 
+#Consumer class
 class Consumer(threading.Thread):
 	def __init__(self, queue, condition):
 		super(Consumer,self).__init__()
@@ -56,6 +67,7 @@ class Consumer(threading.Thread):
 		count = 0
 		while True:
 			self.condition.acquire()
+			#Consumes only if the queue is not empty
 			if self.queue.qsize() <= 0:
 				self.condition.notify()
 				self.condition.wait()
@@ -73,6 +85,7 @@ class Consumer(threading.Thread):
 			count += 1
 			self.condition.release()
 
+#Gray producer class
 class GrayProducer(threading.Thread):
 	def __init__(self, queue, condition,condition2, gQueue):
 		super(GrayProducer,self).__init__()
@@ -85,16 +98,19 @@ class GrayProducer(threading.Thread):
 		count = 0
 		while True:
 			self.condition.acquire()
+			#Consumes only if is not empty
 			if self.queue.qsize() <= 0:
 				self.condition.notify()
 				self.condition.wait()
 			frameAsText = self.queue.get()
 			self.condition.release()
 			
+			#Produce gray frame if queue is not full
 			self.condition2.acquire()	
 			if self.gQueue.qsize() < 10:
 				jpgRawImage = base64.b64decode(frameAsText)
 				jpgImage = np.asarray(bytearray(jpgRawImage), dtype=np.uint8)
+				#Changes color image to gray image
 				img = cv2.imdecode( jpgImage,cv2.IMREAD_GRAYSCALE)
 				success, jpgImage = cv2.imencode('.jpg', img)
 				grayFrame = base64.b64encode(jpgImage)
